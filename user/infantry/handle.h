@@ -28,12 +28,17 @@
 #include "Driver_Magic.h"
 #include "Driver_Fsm.h"
 #include "Driver_Vofa.h"
+#include "Driver_MySteeringWheel.h"
 
 #ifdef __HANDLE_GLOBALS
 #define __HANDLE_EXT
 #else
 #define __HANDLE_EXT extern
 #endif
+
+//电调只能放在1-4
+#define STEERINGWHEEL_CAN_Rx 0x205
+#define STEERINGWHEEL_CAN_Tx 0X1FE
 
 // Stone Id
 __HANDLE_EXT uint8_t Board_Id, Robot_Id;
@@ -101,6 +106,10 @@ __HANDLE_EXT PWM_Type PWM_Test;
 // CAN
 __HANDLE_EXT Bridge_Type BridgeData;
 
+//OpenDrive
+__HANDLE_EXT Motor_Type Steering_Wheel;
+__HANDLE_EXT LowPassFilter_t Steering_Wheel_Filter;
+__HANDLE_EXT TaskHandle_t SteeringWheelTask_Handler;
 /**
  * @brief 初始化结构体
  * @note 该函数将在所有硬件及任务初始化之前执行

@@ -3,15 +3,17 @@
 
 #define PI 3.1415926
 
-void Motor_Init(Motor_Type *motor, float reductionRate, int8_t angleEnabled, int8_t inputEnabled) {
+void Motor_Init(Motor_Type *motor, float reductionRate, int8_t angleEnabled, int8_t inputEnabled,int8_t direction) {
     motor->positionBias  = -1; // -1为未赋值状态
     motor->angleBias     = -1; // -1为未赋值状态
     motor->lastPosition  = -1; // -1为未赋值状态
     motor->reductionRate = reductionRate;
     motor->angleEnabled  = angleEnabled;
     motor->inputEnabled  = inputEnabled;
+    motor->direction     = direction;
 }
 
+//修改过，转矩与电流计算仅适配6020
 void Motor_Update(Motor_Type *motor, uint8_t data[8], uint8_t type) {
     int16_t position;
     int16_t speed;
@@ -32,9 +34,19 @@ void Motor_Update(Motor_Type *motor, uint8_t data[8], uint8_t type) {
 
         // 更新转子信息
         motor->position      = position;
-        motor->speed         = speed;
-        motor->actualCurrent = (actualCurrent / 16384.0) * 20;
-        motor->torque        = MAX(24 * motor->actualCurrent, 0) / (speed * PI / 30.0 / motor->reductionRate + 2);
+        motor->speed         = speed * motor->direction / motor->reductionRate;
+        motor->actualCurrent = (actualCurrent / 16384.0) * 3.0 * motor->direction;
+        // 基于官方 I-T 曲线连续性的 GM6020 转矩计算
+        float calc_current = motor->actualCurrent; // 已经带符号 (+/ -)
+
+        if (calc_current > 0.325f) { // 超过正向克服摩擦电流门槛 (0.241 / 0.741 ≈ 0.325A)
+            motor->torque = (0.741f * calc_current - 0.241f) * motor->reductionRate;
+        } else if (calc_current < -0.325f) { // 超过反向克服摩擦电流门槛
+            motor->torque = (0.741f * calc_current + 0.241f) * motor->reductionRate;
+        } else {
+            // 在静摩擦死区范围内，输出力矩归零（平滑过原点，不发生突变）
+            motor->torque = 0.0f;
+        }
         motor->temperature   = temperature;
 
         //如果启用了连续角度计算
@@ -42,14 +54,14 @@ void Motor_Update(Motor_Type *motor, uint8_t data[8], uint8_t type) {
             if (motor->lastPosition != -1) {
                 //两次编码器的反馈值差别太大,表示圈数发生了改变
                 motor->positionDiff = motor->position - motor->lastPosition;
-                if (motor->positionDiff < -4200) {
+                if (motor->positionDiff < -4096) {
                     motor->round++;
-                } else if (motor->positionDiff > 4200) {
+                } else if (motor->positionDiff > 4096) {
                     motor->round--;
                 }
             }
             //计算得到连续角度值,范围正负无穷大
-            angle = (motor->position / 8192.0f * 360 + motor->round * 360) / motor->reductionRate;
+            angle = motor->direction * (motor->position/8192.0f*360.0f + motor->round*360.0f) / motor->reductionRate;
 
             // 更新连续角度初始位置
             if (motor->angleBiasInit == 0) {
@@ -100,7 +112,7 @@ void Motor_Update(Motor_Type *motor, uint8_t data[8], uint8_t type) {
             // 更新连续角度初始位置
             if (motor->angleBiasInit == 0) {
                 if (motor->positionBias != -1) {
-                    motor->angleBias = motor->positionBias / 65536.0f * 360; // 向下兼容
+                    motor->angleBias = motor->direction * (motor->positionBias / 8192.0f * 360.0f) / motor->reductionRate; // 向下兼容
                 } else {
                     motor->angleBias = angle; // 将当前位置设为
                 }
@@ -121,5 +133,11 @@ void Motor_Update(Motor_Type *motor, uint8_t data[8], uint8_t type) {
 void Motor_Set_Angle_Bias(Motor_Type *motor, float angleBias) {
     motor->angleBias     = angleBias;
     motor->angleBiasInit = 1;
+    motor->lastPosition  = -1;
+}
+
+void Motor_Set_Position_Bias(Motor_Type *motor, float positionBias) {
+    motor->positionBias     = positionBias;
+    motor->angleBiasInit = 0;
     motor->lastPosition  = -1;
 }

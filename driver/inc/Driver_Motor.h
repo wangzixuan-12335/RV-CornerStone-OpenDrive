@@ -17,7 +17,9 @@
 
 #include "stm32f4xx.h"
 
+//新增电机安装方向
 typedef struct {
+    int8_t   direction;     // 电机安装方向（1:正向 -1:反向）
     int16_t  position;      // 转子位置(电调机械角度值), 0-8191
     int16_t  lastPosition;  // 上一次的转子位置
     int16_t  positionDiff;  // 转子位置差值
@@ -47,8 +49,9 @@ typedef struct {
  * @param reductionRate 电机减速比(输入转速:输出转速)
  * @param angleEnabled 是否启用连续角度计算
  * @param inputEnabled 是否启用电流输出
+ * @param direction    电机安装方向(1:正向 -1:反向)
  */
-void Motor_Init(Motor_Type *motor, float reductionRate, int8_t angleEnabled, int8_t inputEnabled);
+void Motor_Init(Motor_Type *motor, float reductionRate, int8_t angleEnabled, int8_t inputEnabled,int8_t direction);
 
 /**
  * @brief 更新电机数据
@@ -67,4 +70,5 @@ void Motor_Update(Motor_Type *motor, uint8_t data[8], uint8_t type);
  */
 void Motor_Set_Angle_Bias(Motor_Type *motor, float angleBias);
 
+void Motor_Set_Position_Bias(Motor_Type *motor, float positionBias);
 #endif
