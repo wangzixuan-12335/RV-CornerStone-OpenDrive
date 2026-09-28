@@ -68,7 +68,14 @@ void UART8_IRQHandler(void) {
 
 // CAN1数据接收中断服务函数
 void CAN1_RX0_IRQHandler(void) {
-    Bridge_Receive_CAN(&BridgeData, CAN1_BRIDGE);
+    //Bridge_Receive_CAN(&BridgeData, CAN1_BRIDGE);
+    CanRxMsg RxMessage;
+    if (CAN_GetITStatus(CAN1, CAN_IT_FMP0) != RESET) {
+        CAN_Receive(CAN1, CAN_FIFO0, &RxMessage);
+        if(RxMessage.StdId==STEERINGWHEEL_CAN_Rx){
+            Motor_Update(&Steering_Wheel,RxMessage.Data,1);
+        }
+    }
 }
 
 // CAN2数据接收中断服务函数
