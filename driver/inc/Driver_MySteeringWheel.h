@@ -15,11 +15,13 @@ typedef struct {
 
 void LPF_Init(LowPassFilter_t *lpf, float alpha);
 float LPF_Update(LowPassFilter_t *lpf, float raw_input);
-float Proportional_Scaling_torque(float target_game_torque);
 float Damping_Torque(float speed);
 float Apply_Wheel_Soft_Limits(float raw_wheel_torque, float motor_angle_deg, float motor_rpm);
 float Apply_Gearbox_Deadzone(float target_motor_torque);
 int16_t Wheel_Torque_To_CAN(Motor_Type *motor,float target_wheel_torque);
+/** 软限位是否正在介入(0/1) */
+extern uint8_t g_soft_limit_active;
+/** 力矩合成, target_torque 单位 N·m (盘面) */
 void General_Control(Motor_Type *motor,float target_torque);
 void SteeringWheel_Motor_Send(Motor_Type *motor,CAN_TypeDef *CANx);
 

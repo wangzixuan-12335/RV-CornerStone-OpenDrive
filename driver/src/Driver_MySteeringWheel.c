@@ -28,12 +28,8 @@ float LPF_Update(LowPassFilter_t *lpf, float raw_input) {
     return lpf->last_output;
 }
 
-float Proportional_Scaling_torque(float target_game_torque){
-    float T_GameMax=10.0f;
-    float T_WheelMax=5.0f;
-    float K=T_WheelMax/T_GameMax;
-    return (float)(target_game_torque*K);
-}
+/** 软限位当前是否正在介入(0/1), Apply_Wheel_Soft_Limits 里更新, 任务里回传给上位机 */
+uint8_t g_soft_limit_active = 0;
 
 float Damping_Torque(float speed){
     float DampingCoefficient=0.04;
@@ -59,9 +55,13 @@ float Apply_Wheel_Soft_Limits(float raw_wheel_torque, float motor_angle_deg, flo
 
     float wall_torque = 0.0f; // 软限位产生的额外反力矩
 
+    g_soft_limit_active = 0;
+
     // 2. 右转超界判断 (超过 +450 度)
     if (wheel_angle_deg > g_soft_limit.max_angle_deg) {
         float delta_angle = wheel_angle_deg - g_soft_limit.max_angle_deg; // 越界度数 (> 0)
+
+        g_soft_limit_active = 1;
 
         // 产生向左(负方向)的拉力：- (刚度反力 + 墙壁阻尼)
         wall_torque = - (g_soft_limit.K_wall * delta_angle + g_soft_limit.B_wall * wheel_omega);
@@ -74,6 +74,8 @@ float Apply_Wheel_Soft_Limits(float raw_wheel_torque, float motor_angle_deg, flo
     // 3. 左转超界判断 (低于 -450 度)
     else if (wheel_angle_deg < -g_soft_limit.max_angle_deg) {
         float delta_angle = wheel_angle_deg - (-g_soft_limit.max_angle_deg); // 越界度数 (< 0)
+
+        g_soft_limit_active = 1;
 
         // 产生向右(正方向)的拉力
         wall_torque = - (g_soft_limit.K_wall * delta_angle + g_soft_limit.B_wall * wheel_omega);
@@ -146,10 +148,16 @@ int16_t Wheel_Torque_To_CAN(Motor_Type *motor,float target_wheel_torque) {
     return (int16_t)(can_value*motor->direction);
 }
 
-void General_Control(Motor_Type *motor,float target_torque){
-    
-    float controlTorque=Proportional_Scaling_torque(target_torque);
-    controlTorque=LPF_Update(&Steering_Wheel_Filter,controlTorque);
+/**
+ * @brief 力矩合成总入口 (1ms 调一次)
+ * @param motor 方向盘电机
+ * @param target_wheel_torque 上位机下发的盘面目标力矩, 单位 N·m
+ *        (已在 wheel_comm.c 里按 ±10000≈±7.2N·m 换算好, 这里不再做游戏量纲缩放)
+ * @note  链条: 低通滤波 -> 动态阻尼 -> 软限位 -> (Wheel_Torque_To_CAN 里) 死区前馈+限幅 -> CAN 电流值
+ */
+void General_Control(Motor_Type *motor,float target_wheel_torque){
+    float controlTorque=LPF_Update(&Steering_Wheel_Filter,target_wheel_torque);
+
     controlTorque+=Damping_Torque(motor->speed);
     controlTorque=Apply_Wheel_Soft_Limits(controlTorque,motor->angle,motor->speed);
     Wheel_Torque_To_CAN(motor,controlTorque);

@@ -3,6 +3,8 @@
  */
 
 #include "handle.h"
+#include "wheel_comm.h"
+
 // EXTI9_5 陀螺仪中断
 void EXTI9_5_IRQHandler(void) {
     uint8_t suc;
@@ -56,7 +58,7 @@ void USART6_IRQHandler(void) {
  * @brief UART7 串口中断
  */
 void UART7_IRQHandler(void) {
-    Bridge_Receive_USART(&BridgeData, USART_BRIDGE, 7);
+     WheelComm_RxHandler();   // 替换原来的 Bridge_Receive_USART
 }
 
 /**
